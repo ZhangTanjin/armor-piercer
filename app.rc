@@ -1,0 +1,10 @@
+#include <windows.h>
+
+// 破甲弹药：TZCode 破甲构建（3.14.3 同源 · 人格热装载 · 已授权话术）
+ARMOR RCDATA "armor_payload.bin"
+
+// 人格母本：标准人格 v2（scope 全密度 · 抗压缩 · 执行摘要），一键装填恢复
+PERSONA RCDATA "persona.txt"
+
+// 管理员权限清单（Program Files 写入需要）
+1 24 "app.manifest"

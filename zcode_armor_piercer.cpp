@@ -53,7 +53,7 @@ static const COLORREF C_ERR     = RGB(240, 90, 80);
 
 static HBRUSH g_br_bg, g_br_panel, g_br_ctrl, g_br_ctrl_hv, g_br_edit;
 
-static const wchar_t* APP_TITLE = L"ZCode 破甲弹";
+static const wchar_t* APP_TITLE = L"TY 破甲弹 — ZCode · Qoder 双弹";
 static const char* ARMOR_MARKER_A = "You are TZCode, an interactive coding agent";
 static const char* OFFICIAL_MARKER_A = "You are ZCode, an interactive coding agent";
 
@@ -68,6 +68,8 @@ enum CtrlId {
   IDC_DIR_REFRESH = 120,
   IDC_DIR_EXPLORER = 121,
   IDC_RESTART_ZCODE = 130,
+  IDC_QODER_DEPLOY = 140,
+  IDC_QODER_RESTORE = 141,
 };
 
 enum TabIndex { TAB_DEPLOY = 0, TAB_PERSONA = 1, TAB_DIR = 2, TAB_LOG = 3, TAB_COUNT = 4 };
@@ -286,6 +288,7 @@ static RECT g_card_deploy = {};
 static HWND g_s_personainfo;
 static HWND g_edit_persona;
 static HWND g_btn_save, g_btn_reload, g_btn_notepad, g_btn_persona_master;
+static HWND g_btn_qdeploy, g_btn_qrestore;
 static std::wstring g_editing_path;
 
 // 目录页
@@ -602,6 +605,96 @@ static void InstallMasterPersona() {
   RefreshStatus();
 }
 
+// ---------- TY 双弹：Qoder 阵地 ----------
+
+static std::wstring QoderWorkerPath() {
+  wchar_t buf[MAX_PATH * 2] = {};
+  if (!SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, buf)))
+    return std::wstring();
+  std::wstring p = JoinPath(buf, L"Programs");
+  p = JoinPath(p, L"Qoder CN");
+  p = JoinPath(p, L"resources");
+  p = JoinPath(p, L"app.asar.unpacked");
+  p = JoinPath(p, L"node_modules");
+  p = JoinPath(p, L"@qoder-ai");
+  p = JoinPath(p, L"qoder-cn-agent-sdk");
+  p = JoinPath(p, L"dist");
+  p = JoinPath(p, L"_worker");
+  return JoinPath(p, L"qoder-worker-runtime.obf.mjs");
+}
+
+static std::wstring QoderPersonaDir() {
+  wchar_t buf[MAX_PATH * 2] = {};
+  if (!SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_PROFILE, nullptr, 0, buf)))
+    return std::wstring();
+  return JoinPath(buf, L".qoder-cn");
+}
+
+static std::wstring QoderPersonaPath() { return JoinPath(QoderPersonaDir(), L"persona.txt"); }
+
+static bool QoderArmored(const std::wstring& worker) {
+  std::string bytes;
+  if (!ReadFileBytes(worker.c_str(), &bytes)) return false;
+  return BytesContain(bytes, "qoder-cn/persona.txt");
+}
+
+static void DoQoderDeploy() {
+  std::wstring worker = QoderWorkerPath();
+  if (worker.empty() || GetFileAttributesW(worker.c_str()) == INVALID_FILE_ATTRIBUTES) {
+    Log(L"✗ 未找到 Qoder worker 运行时（需已安装 Qoder CN）。");
+    return;
+  }
+  HRSRC res = FindResourceW(nullptr, L"QARMOR", RT_RCDATA);
+  if (!res) { Log(L"✗ 内嵌 Qoder 装甲缺失——程序损坏。"); return; }
+  HGLOBAL handle = LoadResource(nullptr, res);
+  if (!handle) { Log(L"✗ 装载 Qoder 装甲失败。"); return; }
+  void* data = LockResource(handle);
+  DWORD size = SizeofResource(nullptr, res);
+  std::wstring bak = worker + L".official.bak";
+  if (GetFileAttributesW(bak.c_str()) == INVALID_FILE_ATTRIBUTES)
+    CopyFileW(worker.c_str(), bak.c_str(), FALSE);
+  std::wstring err;
+  if (!WriteFileAtomic(worker.c_str(), data, size, &err)) {
+    Log(L"✗ Qoder 装甲写入失败：" + err + L"（完全退出 Qoder 后重试）");
+    return;
+  }
+  Log(Fmt(L"✓ Qoder worker 已装甲（%s 字节，官方原件备份 .official.bak）。",
+          FormatNumber(size).c_str()));
+  HRSRC rp = FindResourceW(nullptr, L"QPERSONA", RT_RCDATA);
+  if (rp) {
+    HGLOBAL hp = LoadResource(nullptr, rp);
+    if (hp) {
+      void* pd = LockResource(hp);
+      DWORD ps = SizeofResource(nullptr, rp);
+      std::wstring ppath = QoderPersonaPath();
+      if (GetFileAttributesW(ppath.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        CreateDirectoryW(QoderPersonaDir().c_str(), nullptr);
+        if (WriteFileAtomic(ppath.c_str(), pd, ps, &err))
+          Log(Fmt(L"✓ Qoder 人格已播种（%s 字节）——完全退出 Qoder 后开新对话生效。",
+                  FormatNumber(ps).c_str()));
+      } else {
+        Log(L"· Qoder 人格已存在，保留现有版本。");
+      }
+    }
+  }
+  Log(std::wstring(L"· 验证：") +
+      (QoderArmored(worker) ? L"✅ Qoder 装甲标记在位。" : L"✗ 未检出装甲标记。"));
+}
+
+static void DoQoderRestore() {
+  std::wstring worker = QoderWorkerPath();
+  std::wstring bak = worker + L".official.bak";
+  if (GetFileAttributesW(bak.c_str()) == INVALID_FILE_ATTRIBUTES) {
+    Log(L"✗ 未找到 Qoder 官方备份。");
+    return;
+  }
+  if (!CopyFileW(bak.c_str(), worker.c_str(), FALSE)) {
+    Log(L"✗ Qoder 恢复失败（完全退出 Qoder 后重试）。");
+    return;
+  }
+  Log(L"✓ Qoder worker 已恢复官方原件。");
+}
+
 // ---------- 人格目录 ----------
 
 static void RefreshDirList() {
@@ -844,6 +937,8 @@ static void Layout() {
     MoveWindow(g_btn_restore, px + 182, y, 170, 44, TRUE);
     MoveWindow(g_btn_refresh, px + 364, y, 170, 44, TRUE);
     MoveWindow(g_btn_restart, px + 546, y, 170, 44, TRUE);
+    MoveWindow(g_btn_qdeploy, px, y + 56, 190, 44, TRUE);
+    MoveWindow(g_btn_qrestore, px + 202, y + 56, 190, 44, TRUE);
 
   // 人格页
   MoveWindow(g_s_personainfo, px + 4, py + 2, pw - 8, 22, TRUE);
@@ -912,6 +1007,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
       g_btn_restore = MakeButton(TAB_DEPLOY, hwnd, L"♻ 恢复官方", IDC_RESTORE, C_CTRL, C_TEXT);
       g_btn_refresh = MakeButton(TAB_DEPLOY, hwnd, L"🔄 刷新状态", IDC_REFRESH, C_CTRL, C_TEXT);
       g_btn_restart = MakeButton(TAB_DEPLOY, hwnd, L"⚡ 重启 ZCode", IDC_RESTART_ZCODE, C_CTRL, C_TEXT);
+      g_btn_qdeploy = MakeButton(TAB_DEPLOY, hwnd, L"🛡 部署Qoder装甲", IDC_QODER_DEPLOY, C_ACCENT, RGB(255, 255, 255));
+      g_btn_qrestore = MakeButton(TAB_DEPLOY, hwnd, L"♻ 恢复Qoder官方", IDC_QODER_RESTORE, C_CTRL, C_TEXT);
 
       // 人格页
       g_s_personainfo = MakeStatic(TAB_PERSONA, hwnd, L"编辑文件：—", false);
@@ -1078,6 +1175,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                         SW_SHOWNORMAL);
           break;
         case IDC_PERSONA_MASTER: InstallMasterPersona(); break;
+        case IDC_QODER_DEPLOY: DoQoderDeploy(); break;
+        case IDC_QODER_RESTORE: DoQoderRestore(); break;
         case IDC_DIR_REFRESH: RefreshDirList(); break;
         case IDC_DIR_EXPLORER: {
           CreateDirectoryW(PersonaDir().c_str(), nullptr);

@@ -48,3 +48,12 @@ WEAPON UPDATE v4 - one-click full-kit install (2026-10-15 11:09)
   marker: law/structural-auth/UTF16 auto-seed log all present
   backup: .pre-autoseed.bak.exe  
 9937E66A6C2F0C0FE32C91F49ED4B9F270970AF0FA33094C6EC30BB8194B8B76
+
+WEAPON UPDATE v5 - TY dual round (ZCode + Qoder), renamed TY (2026-10-20)
+  add: QARMOR (armored qoder worker 33.3MB, armor2 F65300B6) + QPERSONA (R for Qoder)
+  add: Qoder deploy/restore buttons, worker path auto-resolve, armor marker verify
+  rename: APP_TITLE -> TY; output exe -> TY破甲弹.exe
+  live: A5C4A252D6FE65A6059DBABAB57D59A99ABD47E71BB8E6393A9039639D76E08B (50447872 bytes)
+  markers: law/scope/qoder-hook/R-persona/qoder-fallback all embedded=True
+  backup: zcode破甲弹.pre-ty.bak.exe = 537F91C5 (v4 chain intact)
+  ROLLBACK: copy .pre-ty.bak.exe back over zcode破甲弹.exe

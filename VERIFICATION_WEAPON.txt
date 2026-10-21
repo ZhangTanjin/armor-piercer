@@ -68,3 +68,14 @@ WEAPON UPDATE v5.2 - visible action feedback (2026-10-21)
   deploy/restore actions (both zones) now: auto-switch to log tab, refresh status,
   and pop a result MessageBox - no more silent success/failure.
   root cause of no-reaction: output went to the log page only; worker file never locked.
+
+QODER ARMOR v3 (native) - 2026-10-21
+  notice: rewritten in Qoder IMPORTANT: idiom (was ZCode-flavored), no roleplay vocabulary
+  persona: rebuilt on Qoder native section architecture:
+    # Working doctrine / # Delivering work / # Executing actions with care
+    # Tool and context discipline / # Tone and style
+  dropped from Qoder persona: [R] prefix, RNA identity, He-address, 当前： status line
+    (those stay in the ZCode round where they belong)
+  worker: 00DF7962 (33297429 B), persona EFB01B0C (2418 B)
+  weapon: DA5CE773 (rebuilt with native QARMOR/QPERSONA resources)
+  rollback: .mjs.official.bak unchanged; rebuild via patch_qoder_native.ps1

@@ -57,3 +57,9 @@ WEAPON UPDATE v5 - TY dual round (ZCode + Qoder), renamed TY (2026-10-20)
   markers: law/scope/qoder-hook/R-persona/qoder-fallback all embedded=True
   backup: zcode破甲弹.pre-ty.bak.exe = 537F91C5 (v4 chain intact)
   ROLLBACK: copy .pre-ty.bak.exe back over zcode破甲弹.exe
+
+WEAPON UPDATE v5.1 - TY UI dual-zone (2026-10-20)
+  deploy page split into two color-coded cards: ZCode blue badge vs Qoder teal badge
+  per-zone status lines + action buttons inside card bounds (overlap fixed)
+  page title TY; worker path shortened to avoid wrap; Qoder live status (worker/armor/persona)
+  screenshot: shot-ty-deploy.png

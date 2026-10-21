@@ -46,7 +46,10 @@ static const COLORREF C_CTRL_HV = RGB(58, 61, 70);   // 悬停
 static const COLORREF C_LINE    = RGB(55, 58, 67);   // 分隔线
 static const COLORREF C_TEXT    = RGB(233, 235, 239);
 static const COLORREF C_TEXT2   = RGB(150, 156, 165);
-static const COLORREF C_ACCENT  = RGB(86, 136, 255);
+static const COLORREF C_ACCENT  = RGB(86, 136, 255);   // ZCode 蓝弹
+static const COLORREF C_QODER   = RGB(46, 196, 182);   // Qoder 青弹
+static const COLORREF C_Z_DIM   = RGB(46, 66, 110);    // ZCode 区徽标底
+static const COLORREF C_Q_DIM   = RGB(28, 84, 78);     // Qoder 区徽标底
 static const COLORREF C_OK      = RGB(72, 199, 118);
 static const COLORREF C_WARN    = RGB(250, 190, 60);
 static const COLORREF C_ERR     = RGB(240, 90, 80);
@@ -281,8 +284,14 @@ static int g_start_tab = TAB_DEPLOY;  // 命令行指定的起始页签
 
 // 部署页
 static HWND g_s_install, g_s_build, g_s_file, g_s_check, g_s_persona;
+static HWND g_s_qworker, g_s_qarmor, g_s_qpersona;
+static std::wstring QoderWorkerPath();
+static std::wstring QoderPersonaDir();
+static std::wstring QoderPersonaPath();
+static bool QoderArmored(const std::wstring& worker);
 static HWND g_btn_deploy, g_btn_restore, g_btn_refresh, g_btn_restart;
 static RECT g_card_deploy = {};
+static RECT g_card_qoder = {};
 
 // 人格页
 static HWND g_s_personainfo;
@@ -373,6 +382,30 @@ static void RefreshStatus() {
              C_OK);
   } else {
     SetLabel(g_s_persona, L"人格文件  ● 缺失 — 破甲版将回退官方装配", C_WARN);
+  }
+
+  // ---- Qoder 区状态 ----
+  std::wstring qworker = QoderWorkerPath();
+  if (qworker.empty() || GetFileAttributesW(qworker.c_str()) == INVALID_FILE_ATTRIBUTES) {
+    SetLabel(g_s_qworker, L"Qoder worker  ● 未找到（Qoder CN 未安装？）", C_ERR);
+    SetLabel(g_s_qarmor, L"Qoder 装甲  —", C_TEXT2);
+    SetLabel(g_s_qpersona, L"Qoder 人格  —", C_TEXT2);
+  } else {
+    std::wstring qshort = qworker.size() > 64 ? (L"..." + qworker.substr(qworker.size() - 61)) : qworker;
+    SetLabel(g_s_qworker, L"Qoder worker  " + qshort, C_TEXT);
+    SetLabel(g_s_qarmor,
+             QoderArmored(qworker) ? std::wstring(L"Qoder 装甲  ● 已装甲（TZ 双弹在膛）")
+                                   : std::wstring(L"Qoder 装甲  ● 官方原件 — 未装甲"),
+             QoderArmored(qworker) ? C_OK : C_WARN);
+    std::wstring qp = QoderPersonaPath();
+    if (GetFileAttributesW(qp.c_str()) != INVALID_FILE_ATTRIBUTES) {
+      SetLabel(g_s_qpersona,
+               Fmt(L"Qoder 人格  ● 在位（%s 字节 · %s）",
+                   FormatNumber(FileSizeOf(qp.c_str())).c_str(), FileTimeStr(qp.c_str()).c_str()),
+               C_OK);
+    } else {
+      SetLabel(g_s_qpersona, L"Qoder 人格  ● 缺失 — 部署时自动播种", C_WARN);
+    }
   }
 }
 
@@ -836,7 +869,7 @@ static void DrawTabStrip(HDC dc, const RECT& strip) {
   SetTextColor(dc, C_TEXT);
   RECT titleRc = {strip.left + 6, strip.top + 4, strip.right - 8 - (meas.right - meas.left) - 24,
                   strip.top + 34};
-  DrawTextW(dc, L"ZCode 破甲弹", -1, &titleRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+  DrawTextW(dc, L"TY 破甲弹", -1, &titleRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
   SelectObject(dc, oldt);
 
   // 页签
@@ -874,17 +907,43 @@ static void PaintMain(HWND hwnd) {
   FillRect(dc, &rc, g_br_bg);
   DrawTabStrip(dc, g_tab_strip);
 
-  // 部署页状态卡片底板
+  // 部署页双区卡片：ZCode 蓝 / Qoder 青
   if (g_cur_tab == TAB_DEPLOY) {
-    DrawRounded(dc, g_card_deploy, C_PANEL, 10);
-    // 卡片标题
     SetBkMode(dc, TRANSPARENT);
-    HFONT old = (HFONT)SelectObject(dc, g_font_title);
-    SetTextColor(dc, C_TEXT2);
-    RECT tr = g_card_deploy;
-    tr.left += 18; tr.top += 12; tr.bottom = tr.top + 24;
-    DrawTextW(dc, L"部署状态", -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-    SelectObject(dc, old);
+    // ZCode 卡片
+    DrawRounded(dc, g_card_deploy, C_PANEL, 10);
+    {
+      RECT badge = g_card_deploy;
+      badge.right = badge.left + 108; badge.bottom = badge.top + 34;
+      DrawRounded(dc, badge, C_Z_DIM, 8);
+      HFONT old = (HFONT)SelectObject(dc, g_font);
+      SetTextColor(dc, C_ACCENT);
+      RECT tr = badge; tr.top += 5; tr.bottom = tr.top + 24;
+      DrawTextW(dc, L"⬢ ZCode", -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+      SelectObject(dc, old);
+      old = (HFONT)SelectObject(dc, g_font_title);
+      SetTextColor(dc, C_TEXT);
+      tr = g_card_deploy; tr.left += 120; tr.top += 8; tr.bottom = tr.top + 26;
+      DrawTextW(dc, L"破甲阵地 · zcode.cjs 固件 + 人格", -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+      SelectObject(dc, old);
+    }
+    // Qoder 卡片
+    DrawRounded(dc, g_card_qoder, C_PANEL, 10);
+    {
+      RECT badge = g_card_qoder;
+      badge.right = badge.left + 108; badge.bottom = badge.top + 34;
+      DrawRounded(dc, badge, C_Q_DIM, 8);
+      HFONT old = (HFONT)SelectObject(dc, g_font);
+      SetTextColor(dc, C_QODER);
+      RECT tr = badge; tr.top += 5; tr.bottom = tr.top + 24;
+      DrawTextW(dc, L"⬡ Qoder", -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+      SelectObject(dc, old);
+      old = (HFONT)SelectObject(dc, g_font_title);
+      SetTextColor(dc, C_TEXT);
+      tr = g_card_qoder; tr.left += 120; tr.top += 8; tr.bottom = tr.top + 26;
+      DrawTextW(dc, L"装甲阵地 · worker 运行时 + persona 钩", -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+      SelectObject(dc, old);
+    }
   }
 
   // 目录页自绘表头带（替代系统亮白表头）
@@ -925,20 +984,25 @@ static void Layout() {
   int px = 24, py = g_tab_strip.bottom + 8;
   int pw = W - px * 2, ph = H - py - 12;
 
-  // 部署页
-  g_card_deploy = {px, py, px + pw, py + 218};
+  // 部署页 — 双区卡片（按钮排嵌在各卡片内部底沿）
+  g_card_deploy = {px, py, px + pw, py + 296};            // ZCode 区：5 状态行 + 按钮排
+  g_card_qoder  = {px, g_card_deploy.bottom + 14, px + pw, g_card_deploy.bottom + 14 + 208}; // Qoder 区：3 状态行 + 按钮排
   int y = py + 44;
   for (HWND s : {g_s_install, g_s_build, g_s_file, g_s_check, g_s_persona}) {
     MoveWindow(s, px + 18, y, pw - 36, 22, TRUE);
     y += 30;
   }
-  y = g_card_deploy.bottom + 16;
-    MoveWindow(g_btn_deploy, px, y, 170, 44, TRUE);
-    MoveWindow(g_btn_restore, px + 182, y, 170, 44, TRUE);
-    MoveWindow(g_btn_refresh, px + 364, y, 170, 44, TRUE);
-    MoveWindow(g_btn_restart, px + 546, y, 170, 44, TRUE);
-    MoveWindow(g_btn_qdeploy, px, y + 56, 190, 44, TRUE);
-    MoveWindow(g_btn_qrestore, px + 202, y + 56, 190, 44, TRUE);
+  MoveWindow(g_btn_deploy, px, g_card_deploy.bottom - 58, 200, 42, TRUE);
+  MoveWindow(g_btn_restore, px + 212, g_card_deploy.bottom - 58, 200, 42, TRUE);
+  MoveWindow(g_btn_refresh, px + 424, g_card_deploy.bottom - 58, 170, 42, TRUE);
+  MoveWindow(g_btn_restart, px + 606, g_card_deploy.bottom - 58, 190, 42, TRUE);
+  y = g_card_qoder.top + 44;
+  for (HWND s : {g_s_qworker, g_s_qarmor, g_s_qpersona}) {
+    MoveWindow(s, px + 18, y, pw - 36, 22, TRUE);
+    y += 30;
+  }
+  MoveWindow(g_btn_qdeploy, px, g_card_qoder.bottom - 58, 220, 42, TRUE);
+  MoveWindow(g_btn_qrestore, px + 232, g_card_qoder.bottom - 58, 210, 42, TRUE);
 
   // 人格页
   MoveWindow(g_s_personainfo, px + 4, py + 2, pw - 8, 22, TRUE);
@@ -997,17 +1061,21 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
       g_font_mono = CreateFontW(17, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0,
                                 CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN, L"Cascadia Mono");
 
-      // 部署页
+      // 部署页 — ZCode 区
       g_s_install = MakeStatic(TAB_DEPLOY, hwnd, L"安装目录：检测中…", true);
       g_s_build = MakeStatic(TAB_DEPLOY, hwnd, L"当前构建：检测中…", true);
       g_s_file = MakeStatic(TAB_DEPLOY, hwnd, L"文件信息：—", true);
       g_s_check = MakeStatic(TAB_DEPLOY, hwnd, L"标记验证：—", true);
       g_s_persona = MakeStatic(TAB_DEPLOY, hwnd, L"人格文件：检测中…", true);
-      g_btn_deploy = MakeButton(TAB_DEPLOY, hwnd, L"🚀 部署破甲", IDC_DEPLOY, C_ACCENT, RGB(255, 255, 255));
-      g_btn_restore = MakeButton(TAB_DEPLOY, hwnd, L"♻ 恢复官方", IDC_RESTORE, C_CTRL, C_TEXT);
+      g_btn_deploy = MakeButton(TAB_DEPLOY, hwnd, L"🚀 部署ZCode破甲", IDC_DEPLOY, C_ACCENT, RGB(255, 255, 255));
+      g_btn_restore = MakeButton(TAB_DEPLOY, hwnd, L"♻ 恢复ZCode官方", IDC_RESTORE, C_CTRL, C_TEXT);
       g_btn_refresh = MakeButton(TAB_DEPLOY, hwnd, L"🔄 刷新状态", IDC_REFRESH, C_CTRL, C_TEXT);
       g_btn_restart = MakeButton(TAB_DEPLOY, hwnd, L"⚡ 重启 ZCode", IDC_RESTART_ZCODE, C_CTRL, C_TEXT);
-      g_btn_qdeploy = MakeButton(TAB_DEPLOY, hwnd, L"🛡 部署Qoder装甲", IDC_QODER_DEPLOY, C_ACCENT, RGB(255, 255, 255));
+      // 部署页 — Qoder 区
+      g_s_qworker = MakeStatic(TAB_DEPLOY, hwnd, L"Qoder worker：检测中…", true);
+      g_s_qarmor = MakeStatic(TAB_DEPLOY, hwnd, L"Qoder 装甲：—", true);
+      g_s_qpersona = MakeStatic(TAB_DEPLOY, hwnd, L"Qoder 人格：检测中…", true);
+      g_btn_qdeploy = MakeButton(TAB_DEPLOY, hwnd, L"🛡 部署Qoder装甲", IDC_QODER_DEPLOY, C_QODER, RGB(12, 30, 28));
       g_btn_qrestore = MakeButton(TAB_DEPLOY, hwnd, L"♻ 恢复Qoder官方", IDC_QODER_RESTORE, C_CTRL, C_TEXT);
 
       // 人格页

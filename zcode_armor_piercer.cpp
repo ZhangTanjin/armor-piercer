@@ -645,13 +645,8 @@ static void InstallMasterPersona() {
 
 // ---------- TY 双弹：Qoder 阵地 ----------
 
-static std::wstring QoderWorkerPath() {
-  wchar_t buf[MAX_PATH * 2] = {};
-  if (!SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, buf)))
-    return std::wstring();
-  std::wstring p = JoinPath(buf, L"Programs");
-  p = JoinPath(p, L"Qoder CN");
-  p = JoinPath(p, L"resources");
+static std::wstring QoderWorkerAt(const std::wstring& base) {
+  std::wstring p = JoinPath(base, L"resources");
   p = JoinPath(p, L"app.asar.unpacked");
   p = JoinPath(p, L"node_modules");
   p = JoinPath(p, L"@qoder-ai");
@@ -659,6 +654,36 @@ static std::wstring QoderWorkerPath() {
   p = JoinPath(p, L"dist");
   p = JoinPath(p, L"_worker");
   return JoinPath(p, L"qoder-worker-runtime.obf.mjs");
+}
+
+// Qoder 0.4.9+ installs into .qoder-versions\<ver>; older builds keep resources at the root.
+// Prefer the newest version directory that actually carries the worker runtime.
+static std::wstring QoderWorkerPath() {
+  wchar_t buf[MAX_PATH * 2] = {};
+  if (!SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, buf)))
+    return std::wstring();
+  std::wstring root = JoinPath(JoinPath(buf, L"Programs"), L"Qoder CN");
+
+  WIN32_FIND_DATAW fd = {};
+  HANDLE h = FindFirstFileW(JoinPath(root, L".qoder-versions\\*").c_str(), &fd);
+  std::vector<std::wstring> versions;
+  if (h != INVALID_HANDLE_VALUE) {
+    do {
+      if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
+      std::wstring name = fd.cFileName;
+      if (name == L"." || name == L"..") continue;
+      versions.push_back(name);
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+  }
+  std::sort(versions.begin(), versions.end(), [](const std::wstring& a, const std::wstring& b) {
+    return a > b;  // lexical: 0.4.10 sorts above 0.4.9
+  });
+  for (const auto& v : versions) {
+    std::wstring candidate = QoderWorkerAt(JoinPath(JoinPath(root, L".qoder-versions"), v));
+    if (GetFileAttributesW(candidate.c_str()) != INVALID_FILE_ATTRIBUTES) return candidate;
+  }
+  return QoderWorkerAt(root);
 }
 
 static std::wstring QoderPersonaDir() {

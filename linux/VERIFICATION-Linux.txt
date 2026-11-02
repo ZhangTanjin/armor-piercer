@@ -1,0 +1,77 @@
+TZCode 破甲工程 · Linux 方式 · 验证账本
+==========================================
+日期: 2026-10-29
+环境: Windows 10.0.19044 x64（宿主机）；POSIX sh 实测用 busybox-w32 1.36（frippery busybox64.exe）
+真实 Linux 首跑待验项见文末。
+
+一、资产清单（D:\TZcode\armor-piercer\linux\）
+----------------------------------------------
+zcode_pojia.sh      Linux 部署器（POSIX sh）：status / deploy / restore / persona / hashes
+proxied-zcode.sh    抓包发射器（对位 launch-proxied.bat）
+fuse_round.py       融合工具（对位 apply_fusion.ps1，python3）
+README-Linux.md     方法文档（阵地地图 / 快速开始 / 铸弹链 / 对照表 / 风险护栏）
+
+二、弹药跨平台校验（现役弹体 armor_payload.bin）
+----------------------------------------------
+命令: PowerShell Latin1 读字节 + Contains 检查
+字面输出:
+  size=15250383
+  law=True        （ATOMIC CONTINUATION DISPATCH 在位）
+  hook=True       （ZCODE_PERSONA_FILE 装载钩在位）
+  persona=True    （.zcode/persona/persona.txt 路径在位）
+  sha256=840FE6D2DAED8C9D7E5B6BF76DB719B52DDB951CE1A12FC01B82B65B84D06C4E
+结论: 纯 JS 弹体，无 Windows 特有字节，跨平台复用。
+
+三、沙箱闭环实测（busybox sh，伪安装根 + 伪 HOME，驱动: .tmp_test/run_sandbox.sh）
+----------------------------------------------
+桩官方弹: fakeroot/resources/glm/zcode.cjs = 43 B, sha256 ac60c6cc6427eb9f83093d5784621714d3698a04caa1eec2da9e41e29e2d0cd6
+
+T1  status（官方态）        → 正确判级：现役=官方原版 / 弹药库=融合弹 / 人格缺失          exit=0
+T2  deploy                  → [+] 官方原版已备份 sha=ac60c6..；[+] 破甲弹已上膛 sha=840fe6..；[+] 人格已播种
+                              物证: cmp 现役==弹体 OK；备份 sha==stub sha OK；人格==仓库 persona.txt OK   exit=0
+T3  deploy 再跑（洗弹）     → "[i] 现役为破甲弹 → 洗弹重部署（官方备份保持不动）"
+                              物证: 备份前后 sha256 相等 (ac60c6..)                                    exit=0
+T4  status（破甲态）        → 现役=破甲弹 15250383 B sha=840fe6..；备份在位                exit=0
+T5  restore                 → 恢复后现役 sha256 ac60c6.. == 官方 stub；备份保留             exit=0
+T6  persona <legacy> -f     → 强制覆盖成功 sha=7fbc2f508a12f6fd11531fcf3b0c926b181dbdffeae0de4bf93f684a55f973c2  exit=0
+T7  裸弹拒收                → "[-] 弹体未融合或缺标记…拒绝部署裸弹"                        exit=1
+T8  无根拒启                → "[-] 未探测到 ZCode 安装根…"                                 exit=1
+T9  --help                  → 头部注释正确渲染                                              exit=0
+T10 sh -n 语法校验          → zcode_pojia.sh [OK]；proxied-zcode.sh [OK]
+
+四、fuse_round.py 与 apply_fusion.ps1 等价性
+----------------------------------------------
+命令: python fuse_round.py armor_payload.pre-fusion.bin .tmp_test\fused_by_python.bin
+      Get-FileHash 对比 armor_payload.fused.bin（Windows PS1 产物）
+字面输出:
+  python = 1D63ED0A88EEF1A7DBD3B9222925E108AFA1F5DBA8C6A2E954610F9B87FB0171  (16892293 B)
+  ps1bin = 1D63ED0A88EEF1A7DBD3B9222925E108AFA1F5DBA8C6A2E954610F9B87FB0171
+  BYTE-EQUAL
+备注: 现役 armor_payload.bin (840FE6D2..) 是新一代融合弹（3.16.3 线），
+      armor_payload.fused.bin (1D63ED0A..) 为旧线产物——本节证明的是融合算法移植等价，
+      部署一律以现役弹 840FE6D2.. 为准。
+      对已融合弹体跑 fuse_round.py 会报 "needle absent"（官方常量已被替换）——预期行为。
+
+五、路径与协议依据（源码逆向，D:\TZcode\ZCode-src\ZCode-main @ 3.15.1）
+----------------------------------------------
+- 布局: packages/desktop/electron-builder.config.js L689-691（extraResources to: "glm"）
+  L748-749（linux target: AppImage/deb/rpm/pacman）
+- 身份: packages/desktop/scripts/desktop-product-identity.mjs
+  production: productName=ZCode, linuxExecutableName=zcode, linuxPackageName=zcode
+  preview:    ZCode Preview / zcode-preview / zcode-preview
+- 执行: 壳用 ELECTRON_RUN_AS_NODE 跑 `resources/glm/zcode.cjs app-server --stdio`（L690 注释）
+- 裸弹源头: packages/desktop/scripts/prepare-agent-node-bundle.mjs L26
+  apps/zcode-cli/packages/cli/dist/zcode.cjs → bundled-agents/<platform>/glm/
+- 独立 CLI: scripts/zcode-distribution/installer.mjs
+  ~/.zcode/runtime/current/bin/zcode.mjs + ~/.local/bin/zcode（另一弹种，未覆盖）
+- 抓包键: packages/shared/src/validationAppSettings.ts L472-474
+  httpProxy / httpProxyNoProxy / httpProxyCaCertPath
+
+六、真实 Linux 首跑待验清单
+----------------------------------------------
+1. /proc/*/exe 进程探测与 running_pids（busybox-w32 无 exe 链接，本沙箱走静态候选路径）
+2. dpkg-query/rpm/pacman 包版本读取
+3. sudo 无写权限路径 → die 提示 → sudo 重跑
+4. 官方 Linux 壳实际安装根确认（推断 /opt/ZCode，依据 electron-builder fpm 默认）
+5. mitmdump + proxied-zcode.sh 全链抓包复验三要素
+6. AppImage --appimage-extract 后 --root 部署 + AppRun 启动

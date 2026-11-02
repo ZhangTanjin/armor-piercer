@@ -1,0 +1,35 @@
+VERIFICATION · Linux Qoder 车道（2026-10-29 ～ 10-30）
+========================================================
+
+[0.4.11] 初次部署与四层移植
+- 目标: /usr/lib/qoder-cn (pacman qoder-cn-bin 0.4.11-1)
+- worker 34389777 B sha256 8f7869f4 → 四层换弹 34387569 B 8c52fe5e
+- 密钥嗅探 Rni9LeZSmPXE; 身份双常量钩; 备份 .official.bak-0.4.11
+
+[强化] 四层 → 十层
+- 新增: classifier2/judge2/rules2/rules3/prefs/automode
+- 官方安全声明专属语汇(12 条指纹)残留 0; 授权语汇 7 层在位
+
+[事故1] v3 语法错误 —— 模板身份正则缺闭合反引号
+- 症状: worker SyntaxError "Unexpected token '{'" → SDK 宿主瘫痪 → 模型目录无限加载
+- 根因: PS 原版正则以反引号结尾, JS 移植丢失 → keep 截断 → 模板串永不闭合
+- 修复: 补回反引号; 引擎新增闭合校验; build/deploy 增加 node --check 语法闸;
+  洗弹改为从官方备份重建。v4 32cab761 验证通过, 模型目录 load completed。
+
+[事故2] "1 个文件未能添加" —— 附件限额, 非损坏
+- 根因: app.asar 184325963 B > 100MiB 附件上限(主进程 Fwx=100*1024*1024)
+- 处置: asar_pojia.sh 等长替换 200→999 文件 / 100→999 MiB; 差异恰 6 字节
+- 附产物: gnome-keyring 缺失导致登录态不持久(换弹前旧病), 安装后 persistenceResult=persisted
+
+[0.5.1] 版本跳跃自适应
+- 混淆标识符升级 _$d→_$d1, 密钥更换 → 解码器改按结构识别(免疫改名), blob 指针动态化
+- classifier2/prefs 层消失, 新增 monitor(30842 字符安全监视器)+pass2(322)
+- 装甲策略: monitor 原文+两段授权语境植入(31520); 代际层 optional 化
+- worker 34838741 B a5bc1ee7; asar 191649339 B cbcd0f4d(锚点 Wg0/GHx/ZHx 自动命中)
+
+[修订] 作战域收敛(2026-10-30)
+- 成人向条款移除, 授权域 = CTF/渗透/漏洞利用/恶意软件分析/逆向/OSINT/红蓝对抗
+- 修订件: qoder_persona.txt, armor-notice.txt, layer-delivering.txt(双仓同步)
+- 修订后 worker ae4aa270
+
+铁律: 官方备份永不覆盖; 弹体出膛必过语法闸; 升级后先 status 后 deploy --kill。

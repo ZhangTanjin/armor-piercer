@@ -11,3 +11,8 @@ armor_payload.pre-fusion.bin
 # runtime noise
 Thumbs.db
 desktop.ini
+
+# build logs
+*.err
+*.out
+qoder-fork/*.log
